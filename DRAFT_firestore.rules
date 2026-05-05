@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.]+$'); }
+
+    // Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'kellyFraction', 'minEdge', 'plan', 'createdAt'])
+        && data.keys().size() == 5
+        && data.email is string && data.email.size() <= 256
+        && data.kellyFraction is number && data.kellyFraction >= 0 && data.kellyFraction <= 1
+        && data.minEdge is number && data.minEdge >= 0 && data.minEdge <= 1
+        && data.plan in ['free', 'pro']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSignal(data) {
+      return data.keys().hasAll(['game', 'edge', 'probability', 'kellyStake', 'status', 'createdAt', 'market', 'odds'])
+        && data.game is string && data.game.size() <= 200
+        && data.edge is number && data.edge >= -1 && data.edge <= 1
+        && data.probability is number && data.probability >= 0 && data.probability <= 1
+        && data.kellyStake is number && data.kellyStake >= 0
+        && data.status in ['OPEN', 'FILLED', 'CLOSED']
+        && data.createdAt is timestamp
+        && data.market is string
+        && data.odds is number;
+    }
+
+    function isValidBet(data) {
+      return data.keys().hasAll(['userId', 'signalId', 'stake', 'odds', 'loggedAt', 'result'])
+        && data.userId == request.auth.uid
+        && data.userId is string
+        && data.signalId is string
+        && data.stake is number && data.stake > 0 && data.stake <= 1000
+        && data.odds is number && data.odds > 0
+        && data.loggedAt is timestamp;
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(userId) && isValidUser(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          // Action: Update Settings
+          incoming().diff(existing()).affectedKeys().hasOnly(['kellyFraction', 'minEdge', 'plan', 'email'])
+        );
+    }
+
+    match /signals/{signalId} {
+      // Apply ID hardening for single doc targeting
+      allow get: if isSignedIn() && isValidId(signalId);
+      allow list: if isSignedIn();
+      allow write: if false; // System only
+    }
+
+    match /bets/{betId} {
+      // betId should be {userId}_{signalId}
+      allow get: if isSignedIn() && isOwner(existing().userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() 
+        && betId == incoming().userId + "_" + incoming().signalId
+        && isValidBet(incoming()) 
+        && incoming().loggedAt == request.time
+        && incoming().result == null;
+      allow update, delete: if false; // Positions are immutable records
+    }
+
+    match /modelMetrics/{date} {
+      allow get, list: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /featureFlags/{userId} {
+      allow get: if isOwner(userId);
+      allow write: if false; // Admin/System only
+    }
+  }
+}

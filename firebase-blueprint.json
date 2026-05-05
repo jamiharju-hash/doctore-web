@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User preferences and subscription data",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "kellyFraction": { "type": "number", "description": "Percentage of Kelly to stake (e.g. 0.1 for 10% Kelly)" },
+        "minEdge": { "type": "number", "description": "Minimum edge to show signal" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "plan": { "type": "string", "enum": ["free", "pro"] }
+      },
+      "required": ["email", "kellyFraction", "minEdge", "createdAt", "plan"]
+    },
+    "Signal": {
+      "title": "Betting Signal",
+      "description": "Information about an MLB game edge",
+      "type": "object",
+      "properties": {
+        "game": { "type": "string" },
+        "edge": { "type": "number" },
+        "probability": { "type": "number" },
+        "kellyStake": { "type": "number" },
+        "status": { "type": "string", "enum": ["OPEN", "FILLED", "CLOSED"] },
+        "result": { "type": "string", "enum": ["WIN", "LOSS", "PUSH", null] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["game", "edge", "probability", "kellyStake", "status", "createdAt"]
+    },
+    "Bet": {
+      "title": "User Bet",
+      "description": "Record of a bet placed by a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "signalId": { "type": "string" },
+        "stake": { "type": "number" },
+        "odds": { "type": "number" },
+        "result": { "type": "string", "enum": ["WIN", "LOSS", "PUSH", null] },
+        "loggedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "signalId", "stake", "odds", "loggedAt"]
+    },
+    "ModelMetric": {
+      "title": "Model Performance Metadata",
+      "description": "Daily metrics for the ML model",
+      "type": "object",
+      "properties": {
+        "aucRoc": { "type": "number" },
+        "brierScore": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "sampleN": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["aucRoc", "brierScore", "accuracy", "sampleN", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User settings and profile"
+    },
+    "signals/{signalId}": {
+      "schema": "Signal",
+      "description": "MLB betting signals"
+    },
+    "bets/{betId}": {
+      "schema": "Bet",
+      "description": "Individual user bets"
+    },
+    "modelMetrics/{date}": {
+      "schema": "ModelMetric",
+      "description": "ML model accuracy metrics"
+    },
+    "featureFlags/{userId}": {
+      "schema": {
+        "type": "object",
+        "description": "User-specific feature gates"
+      },
+      "description": "Phase 2 rollout control"
+    }
+  }
+}
